@@ -1,37 +1,22 @@
 from fastapi import FastAPI
-import requests
-from config import API_KEY
-from database import get_db_connection
-
+from fastapi.middleware.cors import CORSMiddleware
+from routers import stocks, login, signup, buy_router, sell_router, user_router, gemini_router, trade_history
 app = FastAPI()
 
-FINNHUB_URL = "https://finnhub.io/api/v1/quote"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4747"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/fetch_stock/{symbol}")
-def fetch_stock(symbol: str):
-    params = {"symbol": symbol, "token": API_KEY}
-    response = requests.get(FINNHUB_URL, params=params)
-    
-    if response.status_code != 200:
-        return {"error": "Failed to fetch stock data"}
-    
-    data = response.json()
-    
-    # MySQL에 데이터 저장
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    sql = """
-    INSERT INTO stock_data (symbol, current_price, price_change, percent_change, 
-                            high_price, low_price, open_price, prev_close, timestamp)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    values = (symbol, data["c"], data["d"], data["dp"], data["h"], 
-              data["l"], data["o"], data["pc"], data["t"])
-
-    cursor.execute(sql, values)
-    conn.commit()
-    cursor.close()
-    conn.close()
-    
-    return {"message": "Stock data saved", "data": data}
+app.include_router(stocks.router)
+app.include_router(login.router)
+app.include_router(signup.router)
+app.include_router(buy_router.router, prefix="/order")
+app.include_router(sell_router.router, prefix="/order")
+app.include_router(user_router.router, prefix="/user")
+app.include_router(gemini_router.router)
+app.include_router(trade_history.router)
+print("직접 임포트 시도도")
