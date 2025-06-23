@@ -60,8 +60,13 @@ class _CheckScreenState extends State<CheckScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        title: Text('AI 피드백 요청 중...'),
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.grey[800],
+        title: Text('AI 피드백 요청 중...',
+            style: const TextStyle(
+              color: Colors.purpleAccent,
+              fontSize: 20,
+            )),
         content: Center(child: CircularProgressIndicator()),
       ),
     );
@@ -73,12 +78,19 @@ class _CheckScreenState extends State<CheckScreen> {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text(' AI 투자 피드백'),
+          backgroundColor: Colors.grey[800],
+          titleTextStyle: TextStyle(color: Colors.purpleAccent),
+          title: const Text(' AI 투자 피드백',
+              style: const TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.bold,
+              )),
           content: SingleChildScrollView(
             child: Text(
               advice,
               style: const TextStyle(
-                fontSize: 16,
+                color: Colors.white,
+                fontSize: 18,
                 height: 1.5,
               ),
               softWrap: true,
@@ -87,7 +99,10 @@ class _CheckScreenState extends State<CheckScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("닫기"),
+              child: const Text(
+                "닫기",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
