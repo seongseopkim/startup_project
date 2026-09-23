@@ -8,8 +8,9 @@
 1. **다른 사람이 실행해도 깨지지 않는 앱** — 컴퓨터/계정이 달라도 클론 후 바로 뜨는 상태
 2. **발표에서 보여줄 "보안/인증/값 신뢰" 개선 스토리** — Before(취약) → After(패치) 구조로 직접 시연 가능해야 함
 3. **구글/카카오 소셜 로그인 연동** — 스토어 배포 없이, 로컬/테스트 기기에서 동작
+4. **콘텐츠 보강** — 종목 뉴스 피드, 자산 요약 홈 대시보드 등을 추가해서 "모의 매매만 되는 앱"에서 "실제 서비스처럼 보이는 앱"으로 완성도를 높임
 
-세 목표는 서로 겹칩니다. 특히 목표 2와 3은 목표 1(환경 재현성)이 먼저 되어 있어야 시연 중 사고가 안 납니다. 그래서 순서를 **환경 → 인증/신뢰 → 소셜 로그인 → 발표 자료**로 잡았습니다.
+네 목표는 서로 겹칩니다. 특히 목표 2와 3은 목표 1(환경 재현성)이 먼저 되어 있어야 시연 중 사고가 안 납니다. 그래서 순서를 **환경 → 인증/신뢰 → 소셜 로그인 → 콘텐츠 보강 → 잔여 정리**로 잡았습니다. 이 문서는 졸업작품 제출을 전제로 하므로, "발표 때만 보여주는 임시 조치"가 아니라 실제로 계속 동작해야 하는 기준으로 각 단계를 작성합니다.
 
 ---
 
@@ -96,6 +97,47 @@ PROJECT_REVIEW.md에 있는 것 중 위 단계에서 자연히 안 고쳐지는 
 
 ---
 
+## Phase 4. 콘텐츠 보강 — 종목 뉴스 피드 & 자산 요약 홈 대시보드
+
+지금 앱은 "종목 검색 → 차트 → 모의 매수/매도"와 "투자 기록 조회"만 있어서 실제 서비스 느낌이 약합니다. 아래 두 기능을 추가합니다. 둘 다 기존 스택(Finnhub 키, `UserPortfolio` 테이블, `syncfusion_flutter_charts`)을 그대로 재사용할 수 있습니다.
+
+### 4-A. 종목 뉴스 피드
+
+**백엔드**
+- [ ] `routers/stocks.py`에 `GET /stocks/{symbol}/news` 추가 (또는 `routers/news_router.py` 신설). Finnhub `company-news` 엔드포인트(`https://finnhub.io/api/v1/company-news?symbol={symbol}&from=...&to=...&token=...`)를 호출하는 프록시.
+  - `from`/`to`는 서버에서 "오늘 기준 최근 14일"로 자동 계산 (클라이언트가 날짜를 보내게 하지 않음 — Phase 1의 "클라이언트 값을 함부로 신뢰하지 않는다" 원칙을 여기도 적용).
+  - Finnhub 응답에서 `headline`, `source`, `url`, `datetime`, `image`, `summary`만 추려서 최신순 상위 10~15개만 반환 (원본 그대로 넘기면 불필요하게 큼).
+  - `requests.get(..., timeout=5)` 로 타임아웃 지정 (PROJECT_REVIEW.md 5번 항목, 지금 백엔드 전체에 타임아웃이 없는 문제를 이 신규 코드부터는 피함).
+  - `API_KEY`는 Phase 0에서 `.env`로 옮긴 것을 그대로 사용.
+- [ ] Finnhub 무료 플랜 rate limit(분당 호출 수) 확인 — 화면 진입마다 호출되면 금방 소진되므로, 같은 심볼은 서버 메모리에 몇 분간 캐시(간단히 `dict` + timestamp)하는 것 권장.
+
+**프론트**
+- [ ] `flutter_app/lib/services/news_service.dart` 신설 — `fetchStockNews(symbol)` 함수, 백엔드 프록시만 호출 (Finnhub를 클라이언트가 직접 부르지 않음 → PROJECT_REVIEW.md 4.4에서 지적한 "클라이언트에 키 노출" 패턴을 신규 기능에서는 처음부터 피하는 것).
+- [ ] `alpha_chart_screen.dart`의 차트 화면 하단(또는 별도 섹션)에 뉴스 카드 리스트 추가 — 헤드라인, 출처+날짜, 탭하면 원문 링크로 이동.
+- [ ] 원문 링크 이동을 위해 `url_launcher` 패키지를 `pubspec.yaml`에 추가.
+- [ ] 뉴스가 없거나 API 실패 시 "관련 뉴스가 없습니다" 같은 빈 상태 UI 처리.
+
+### 4-B. 자산 요약 홈 대시보드
+
+지금 `UserPortfolio`(보유 종목 현황) 테이블은 있지만, 이걸 조회하는 API가 없어서(매수/매도 서비스 내부에서만 씀) 새로 하나 만들어야 합니다. 이 작업은 PROJECT_REVIEW.md 2.3에서 지적한 "포트폴리오는 `UserPortfolio`를 정답으로 취급하자"는 방향과 맞아서, Phase 3의 `trade_history.py` 정리와 같이 진행하면 중복 작업이 줄어듭니다.
+
+**백엔드**
+- [ ] `services/finnhub_service.py` 또는 신규 `services/price_service.py`에 `get_current_price(symbol)`을 공용 함수로 분리 (지금 `routers/trade_history.py`에만 있는 걸 재사용 — 중복 제거).
+- [ ] `GET /user/portfolio` 신설 (Phase 1 적용 후에는 토큰에서 `user_id`를 꺼내고, 그 전이라면 임시로 path/query의 `user_id` 사용) — `UserPortfolio` 테이블을 읽어서 `[{symbol, quantity, average_price, current_price, total_value}]` 형태로 반환.
+- [ ] `GET /user/summary` 신설 — 현금 잔고(`User.balance`) + 위 포트폴리오 평가금액 합산 → `{cash, holdings_value, total_assets, total_return_pct}` 반환. `total_return_pct`는 "총 투입 대비 현재 총자산" 기준으로 계산(간단한 버전으로 시작, 일별 스냅샷 기반의 "오늘 변동률"은 이후 과제로 남김).
+
+**프론트**
+- [ ] `flutter_app/lib/features/home/home_dashboard_screen.dart` 신설.
+- [ ] `MainScreen`의 `_pages`/`BottomNavBar`에 "홈" 탭을 맨 앞에 추가 (기존 주식 검색/투자기록/용어사전 탭 유지, 탭 4개로 확장).
+- [ ] 화면 구성: 총자산 큰 숫자 카드 → 현금/평가금액 구성 표시 → 보유 종목 요약 리스트(상위 몇 개, "전체보기"로 `CheckScreen` 이동) → 수익률 배지.
+- [ ] `/user/summary`, `/user/portfolio` 두 API를 호출해서 구성.
+
+### 순서상 주의점
+- 4-B(자산 대시보드)는 Phase 3의 포트폴리오/트레이드 히스토리 정리, Phase 1의 인증(진짜 `user_id` 확보)과 맞물려 있어서, **Phase 1 이후에 진행하는 게 자연스럽습니다.** (먼저 만들어도 동작은 하지만, 나중에 `user_id` 전달 방식을 인증 토큰 기반으로 다시 고쳐야 함)
+- 4-A(뉴스 피드)는 인증과 무관하므로 **언제든 먼저 시작해도 무방**합니다.
+
+---
+
 ## 발표 구성 제안 (참고용)
 
 1. **문제 제기**: "모의투자 앱을 만들면서, 처음엔 기능 구현에 집중했더니 이런 보안 구멍들이 있었다" — PROJECT_REVIEW.md의 1.2/1.3/1.4를 캡처+curl 명령으로 재현
@@ -114,3 +156,6 @@ PROJECT_REVIEW.md에 있는 것 중 위 단계에서 자연히 안 고쳐지는 
 | 1 | JWT 실제 검증, 서버 측 가격/수량 검증 | 발표의 핵심 Before/After |
 | 2 | 구글/카카오 로그인 + 서버 재검증 | 발표의 확장 사례 |
 | 3 | 나머지 버그/죽은 코드 정리 | 병행 진행, 안정성 확보 |
+| 4 | 종목 뉴스 피드, 자산 요약 홈 대시보드 | 완성도/콘텐츠 보강 (4-A는 언제든, 4-B는 Phase 1 이후 권장) |
+
+> 추가로 채택할 기능(리더보드, 통계 대시보드, 실시간 시세, 주문 유형 다양화, 테스트/CI 등)은 논의 후 이 표와 Phase 4 아래에 계속 추가합니다.
