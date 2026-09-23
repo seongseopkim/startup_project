@@ -13,8 +13,6 @@ router = APIRouter()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
 
-print("✅ GEMINI_API_KEY:", GEMINI_API_KEY)
-
 @router.post("/ask-gemini")
 def ask_gemini(payload: dict):
     prompt = payload.get("question")

@@ -18,6 +18,20 @@
 
 ---
 
+## 2026-09-23 — 환경 재현성: 전용 venv + Docker MySQL (Phase 0)
+
+- Phase: 0
+- 변경 파일: `requirements.txt`(신규), `schema.sql`(신규), `docker-compose.yml`(신규), `routers/gemini_router.py`(디버그 print 제거), `config.py`·`db.py`·`database.py`(이전 작업에서 이미 .env 전환, 이번에 새 venv에서 재검증)
+- 내용:
+  - 하드코딩된 비밀값을 `.env`로 옮기는 작업(직전 커밋)을 검증하는 과정에서, 로컬 conda 환경(`fastapi_env`, 다른 프로젝트와 공유 중)에 `sqlalchemy`, `mysql-connector-python` 등 핵심 패키지가 전혀 없어 백엔드가 이 컴퓨터에서 한 번도 정상 기동하지 못했던 상태였음을 확인.
+  - 기존 `venv/`는 Windows용(`Lib`/`Scripts` 구조)이라 macOS에서 사용 불가 — 삭제 후 Homebrew Python 3.11로 macOS용 `venv/`를 새로 생성, 실제 import 가능한 패키지 전체를 설치하고 `pip freeze > requirements.txt`로 고정.
+  - MySQL을 로컬에 직접 설치하지 않고 `docker-compose.yml`로 컨테이너화. 최초 기동 시 자동 실행되는 `schema.sql`도 함께 작성 (`users`/`trade_history`/`user_portfolio`/`Stocks`/`DailyPrice`). `users.balance`에 `DEFAULT 1000000.00`을 넣어 PROJECT_REVIEW.md 2.6(신규가입 balance NULL로 첫 매수 시 500 에러) 문제를 스키마 차원에서 같이 해결.
+  - 검증 중 `routers/gemini_router.py`의 디버그용 `print("✅ GEMINI_API_KEY:", GEMINI_API_KEY)`가 `main.py` import 시점에 **실제 Gemini API 키 값을 출력**하는 것을 발견 → 해당 print문 제거. (이 키는 대화 로그에 한 번 노출되었으므로 재발급 권장)
+  - `venv/` 전체와 `__pycache__/*.pyc`가 `.gitignore` 규칙에도 불구하고 이미 git에 커밋되어 추적되고 있던 것을 발견 (별도 승인 필요 항목으로 보고).
+- 확인: `docker compose up`으로 MySQL 컨테이너 기동 → healthy 확인 → `database.get_connection()`으로 실제 접속 및 5개 테이블 생성 확인 → `uvicorn main:app` 기동 → `/signup`→`/login`→`/user/balance/1` curl로 엔드투엔드 테스트, 신규가입 유저 balance가 기본값 1000000으로 정상 반영됨을 확인.
+
+---
+
 ## 2026-09-18 — 점검 및 계획 수립 (사전 작업)
 
 - Phase: 0 (착수 전)
